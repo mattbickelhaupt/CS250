@@ -6,7 +6,6 @@ import javafx.scene.layout.HBox;
 
 public class myBox extends HBox {
     myBox(){
-
         this.setPadding(new Insets(0, 15, 5, 0));
         this.setSpacing(10);
         this.setAlignment(Pos.CENTER);
