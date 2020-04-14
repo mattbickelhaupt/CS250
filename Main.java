@@ -1,137 +1,420 @@
 package sample;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.embed.swing.SwingFXUtils;
-import javafx.event.ActionEvent;
-import javafx.event.Event;
 import javafx.event.EventHandler;
-import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.*;
+import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.*;
-import javafx.scene.layout.*;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Ellipse;
 import javafx.scene.shape.Rectangle;
-import javafx.scene.shape.Shape;
-import javafx.scene.text.Text;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
+import org.w3c.dom.css.Rect;
 
 import javax.imageio.ImageIO;
+import javax.swing.*;
+import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
-import java.awt.image.RenderedImage;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+
+import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * This class constructs the main canvas displayed in the Paint Application
+ * @author MatthewBickelhaupt
+ * @version 5.0
+ */
 
 public class Main extends Application {
-    FileChooser fileChooser = new FileChooser();
+
+    /**
+     * Main class for Paint Canvas
+     * Contains code for drawing lines, shapes and tools
+     * @param color1 colorPicker1 selection
+     * @param color2 colorPicker2 selection
+     * @param lineType toolMenu selection
+     * @param height canvas full height
+     * @param width canvas full width
+     * @param changes changes true or false to save
+     *
+     * @return
+     */
+    
+
+    private static String lineType;
+    private static ScrollPane sp2 = new ScrollPane();
+    private boolean changes = false;
 
     public double realWidth = 500;
     public double realHeight = 300;
-    public int sizeOfCanvas = 350;
-    public String lineType = "None";
-    public String shapeType = "None";
+    double x[] = new double[3];
+    double y[] = new double[3];
+    double xp[] = new double[20];
+    double yp[] = new double[20];
 
-    public boolean changes = false;
-    public List<Shape> shapes = new ArrayList<>();
+    public int point = 0;
+    public Canvas canvas = new Canvas();
 
+    public GraphicsContext gc = canvas.getGraphicsContext2D();
+    private WritableImage grabImage;
+    private WritableImage moveImage;
+    private PixelReader pixelReader;
 
-    final Canvas canvas = new Canvas(realWidth + 50, realHeight);
-    GraphicsContext gc = canvas.getGraphicsContext2D();
-
-    Image selectedImage;
-    ScrollPane sp2 = new ScrollPane(canvas);
-
-    Stage primaryStage = new Stage();
     Stage secondaryStage = new Stage();
+    public Color color;
 
     @Override
     public void start(Stage primaryStage) throws Exception {
 
-        primaryStage.setTitle("File Chooser Sample");
+        canvas.setWidth(realWidth);
+        canvas.setHeight(realHeight);
 
-        Menu fileMenu = new Menu("File");
-        Menu editMenu = new Menu("Edit");
-
-        MenuItem btnProp = new MenuItem("Properties");
-        MenuItem btnSave = new MenuItem("Save");
-        MenuItem btnSaveAs = new MenuItem("Save As");
-        MenuItem btnNew = new MenuItem("New");
-        MenuItem btnOpen = new MenuItem("Open Image");
-        MenuItem btnOpen2 = new MenuItem("Open Squad Image");
-        MenuItem btnResize = new MenuItem("Resize Canvas");
-
-        MenuItem btnUndo = new MenuItem("Undo");
-        MenuItem btnRedo = new MenuItem("Redo");
-
-        fileMenu.getItems().addAll(btnProp, btnOpen, btnOpen2, btnSave, btnSaveAs, btnNew);
-        editMenu.getItems().addAll(btnUndo, btnRedo, btnResize);
-
-        MenuBar topMenu = new MenuBar();
-        topMenu.setPadding(new Insets(0, 0, 0, 0));
-        topMenu.getMenus().add(fileMenu);
-        topMenu.getMenus().add(editMenu);
-
-        final ColorPicker colorPicker = new ColorPicker();
-        colorPicker.setValue(Color.BLACK);
-        final ColorPicker colorPicker2 = new ColorPicker();
-        colorPicker2.setValue(Color.WHITE);
-
-        final ComboBox lineSizeBox = new ComboBox();
-        lineSizeBox.getItems().addAll("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
-        final ComboBox lineTypeBox = new ComboBox();
-        lineTypeBox.getItems().addAll("Straight Line", "Free Hand", "Rectangle", "Square", "Circle", "Ellipse", "Color Dropper");
-        lineSizeBox.setMaxWidth(30);
+        Timeline timeline = new Timeline(new KeyFrame(
+                Duration.millis(5000),
+                ae -> myToolMenu.myAutoSave(primaryStage)));
+        timeline.setCycleCount(Animation.INDEFINITE);
+        timeline.play();
 
         gc.setFill(Color.WHITE);
         gc.fillRect(0, 0, realWidth + 50, realHeight);
         gc.setLineWidth(1);
-
+        gc.setStroke(Color.BLACK);
         Rectangle rect = new Rectangle();
+        Rectangle grabRect = new Rectangle();
+        Rectangle hole = new Rectangle();
+
         Circle circ = new Circle();
         Ellipse elip = new Ellipse();
 
-        sp2.setPrefWidth(0);
-        sp2.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
         final StackPane zoomPane = new StackPane();
-        sp2.setContent(zoomPane);
-
-        myButton btnClose = new myButton("Close");
-
-        myBox hboxBot = new myBox();
-        hboxBot.getChildren().addAll(btnClose);
 
         BorderPane root = new BorderPane();
-        ScrollPane sp = new ScrollPane(root);
-        sp.setPrefWidth(0);
-        sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
-        sp.setContent(root);
-        VBox fullMenu = new VBox();
-        myBox hboxTop = new myBox();
-        hboxTop.getChildren().addAll(topMenu, colorPicker,colorPicker2, lineTypeBox, lineSizeBox);
-        fullMenu.getChildren().addAll(hboxTop);
 
+        //ScrollPane sp2 = new ScrollPane();
+
+        ScrollPane sp = new ScrollPane();
+
+        myVBox VBox = new myVBox(canvas, gc, primaryStage, secondaryStage, color, (int) realWidth, (int) realHeight, changes, sp2, root);
+
+        myHBox.setSize((int)realWidth,(int)realHeight);
+        root.setTop(VBox);
+
+        sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);        //window scrollpane
+        sp.setContent(root);
+
+        sp2.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);       //canvas scrollpane
+        sp2.setContent(zoomPane);
+
+        //drawText myText = new drawText(canvas,gc,x,y);
+        Label lblText = new Label("Text:   ");
+        TextField myText = new TextField();
+        HBox textBox = new HBox();
+        textBox.getChildren().addAll(lblText, myText);              //textbox for adding text to canvas and number of polygon sides
+
+        String str = myText.getText();
+        //int num = (int)Double.parseDouble(str);
+
+
+        root.setBottom(textBox);
+        zoomPane.getChildren().add(canvas);
         root.setCenter(sp2);
-        root.setTop(fullMenu);
-        root.setBottom(hboxBot);
+        root.setPrefWidth(myHBox.getMyWidth() + 120);
+
+        Scene scene = new Scene(sp, myHBox.getMyWidth() + 140, myHBox.getMyHeight() + 150);
+        primaryStage.setScene(scene);
+        primaryStage.show();
+
+        canvas.setOnMousePressed(e -> {             //mouse pressed on canvas
+
+            WritableImage image2 = new WritableImage(myHBox.getMyWidth(), myHBox.getMyHeight());
+            canvas.snapshot(null, image2);
+            saveToFile(image2, 2);              //save image to cache2 for undo
+
+            if (lineType == "Color Dropper") {      //grab color at mouse position
+                WritableImage image = new WritableImage(myHBox.getMyWidth(), myHBox.getMyHeight());
+                canvas.snapshot(null, image);
+                PixelReader r = image.getPixelReader();
+                Color color2 = r.getColor((int) e.getX(), (int) e.getY());
+                color = color2;
+                myToolMenu.setColor(color);
+
+            }
+            if (lineType == "Rectangle") {          //start rectangle at mouse pressed
+                rect.setX(e.getX());
+                rect.setY(e.getY());
+
+            }
+
+            if(lineType == "Grab"){                //start corner of grabber
+                grabImage = new WritableImage((int) canvas.getWidth(), (int) canvas.getHeight());
+                canvas.snapshot(null, grabImage);
+
+                hole.setX(e.getX());
+                hole.setY(e.getY());
+
+                rect.setX(e.getX());
+                rect.setY(e.getY());
+
+                grabRect.setX(e.getX());
+                grabRect.setY(e.getY());
+            }
+
+            else if (lineType == "Square") {        //start corner of square
+                rect.setX(e.getX());
+                rect.setY(e.getY());
+
+            }
+            else if (lineType == "Triangle"){       //add point number 1-3 of triangle
+
+                x[point] = e.getX();
+                y[point] = e.getY();
+
+                gc.setStroke(color);
+                gc.lineTo(e.getX(), e.getY());
+                gc.setStroke(color);
+                gc.stroke();
+                gc.moveTo(e.getX(), e.getY());
+
+                point++;
+                if(point == 3){
+                    gc.setStroke(color);
+                    gc.fillPolygon(x,y,3);
+                    gc.strokePolygon(x,y,3);
+                    gc.strokePolyline(x,y,3);
+                    gc.closePath();
+                    gc.beginPath();
+                    point = 0;
+
+                }
+            }
+
+            else if (lineType == "Polygon"){        //add point number 1-num of polygon
+                int num = (int)Double.parseDouble(myText.getText());
+                Triangle.setPoints(num);
+                xp[point] = e.getX();
+                yp[point] = e.getY();
+                gc.lineTo(e.getX(), e.getY());
+                gc.setStroke(color);
+                gc.stroke();
+                gc.moveTo(e.getX(), e.getY());      //adds line connecting two previous points
+
+                point++;
+                if(point == num){
+                    gc.fillPolygon(xp,yp,num);
+                    gc.strokePolygon(xp,yp,num);
+                    gc.strokePolyline(xp,yp,num);
+                    gc.closePath();
+                    gc.beginPath();
+                    point = 0;
+
+                }
+            }
+            else if (lineType == "Circle" || lineType == "Crazy Circles") {
+                circ.setCenterX(e.getX());
+                circ.setCenterY(e.getY());              //begins a circle
+            }
+            else if (lineType == "Ellipse") {
+                elip.setCenterX(e.getX());
+                elip.setCenterY(e.getY());              //begins an ellipse
+            }
+            else if (lineType == "Straight Line") {
+                gc.stroke();                            //sets point one of line
+                //graphicsContext.closePath();
+                gc.beginPath();
+                gc.moveTo(e.getX(), e.getY());
+
+            } else if (lineType == "Text") {
+
+                gc.moveTo(e.getX(), e.getY());          //places text from textbox and mouse position
+                gc.strokeText(myText.getText(),e.getX(),e.getY());
+
+            }
+        });
+
+        canvas.setOnMouseDragged(e -> {                     //mouse dragged on canvas
+
+            if (lineType == "Free Hand") {
+
+                gc.lineTo(e.getX(), e.getY());
+                gc.stroke();
+                gc.closePath();
+                gc.beginPath();
+                gc.moveTo(e.getX(), e.getY());              //constant draw on mouse drag
+
+                myHBox.setChanges(true);
+                primaryStage.setTitle("Matt's Paint *not saved");
+            }
+
+            else if(lineType == "Move"){                    //moves selected rectangle from grab to mouse
+
+                gc.fillRect(hole.getX(), hole.getY(), hole.getWidth(), hole.getHeight());
+                gc.strokeRect(hole.getX(), hole.getY(), hole.getWidth(), hole.getHeight());
+
+                gc.drawImage(grabImage, 0, 0);
+                gc.drawImage(moveImage, e.getX(), e.getY());
+
+            }
+
+            else if(lineType == "Rectangle"){               //continually draw rectangle as its being drawn
+                rect.setWidth(Math.abs((e.getX() - rect.getX())));
+                rect.setHeight(Math.abs((e.getY() - rect.getY())));
+                gc.fillRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+                gc.strokeRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+
+                double lineWidth = gc.getLineWidth();
+                gc.clearRect(e.getX() - lineWidth / 2, e.getY() - lineWidth / 2, lineWidth, lineWidth);
+
+            }
+            else if(lineType == "Square"){               //continually draw square as its being drawn
+                rect.setWidth(Math.abs((e.getX() - rect.getX())));
+                rect.setHeight(rect.getWidth());
+                gc.fillRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+                gc.strokeRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+
+                double lineWidth = gc.getLineWidth();
+                gc.clearRect(e.getX() - lineWidth / 2, e.getY() - lineWidth / 2, lineWidth, lineWidth);
+
+            }
+
+            else if(lineType == "Crazy Circles"){           //continually draw circles on top of each other
+                circ.setRadius((Math.abs(e.getX() - circ.getCenterX()) + Math.abs(e.getY() - circ.getCenterY())) / 2);
+
+                gc.fillOval(circ.getCenterX(), circ.getCenterY(), circ.getRadius(), circ.getRadius());
+                gc.strokeOval(circ.getCenterX(), circ.getCenterY(), circ.getRadius(), circ.getRadius());
+
+            }
+
+            else if(lineType == "Eraser"){                  //draws in white simulating an eraser
+                gc.setStroke(Color.WHITE);
+                gc.lineTo(e.getX(), e.getY());
+                gc.stroke();
+                gc.closePath();
+                gc.beginPath();
+                gc.moveTo(e.getX(), e.getY());
+
+            }
+
+
+        });
+
+        canvas.setOnMouseReleased(e -> {                //mouse released
+
+            WritableImage image1 = new WritableImage(myHBox.getMyWidth(), myHBox.getMyHeight());
+            canvas.snapshot(null, image1);
+            saveToFile(image1, 1);                  //saved to cache1 for redo
+
+            myHBox.setChanges(true);                    //changes are made
+            if(lineType == "Grab"){                     //set opposing corner of grab
+                gc.setStroke(Color.WHITE);
+                gc.setFill(Color.WHITE);
+
+                grabRect.setWidth(Math.abs(e.getX()-grabRect.getX()));
+                grabRect.setHeight(Math.abs(e.getY()-grabRect.getY()));
+
+                if(grabRect.getX() > e.getX()) {
+                    grabRect.setX(e.getX());
+                }
+                if(grabRect.getY() > e.getY()) {
+                    grabRect.setY(e.getY());
+                }
+
+                WritableImage writableImage = new WritableImage((int)canvas.getWidth(), (int)canvas.getHeight());
+                canvas.snapshot(null, writableImage);
+                gc.fillRect(grabRect.getX(), grabRect.getY(), grabRect.getWidth(), grabRect.getHeight());
+
+                pixelReader = writableImage.getPixelReader();
+                moveImage = new WritableImage(pixelReader, (int)grabRect.getX(), (int)grabRect.getY(), (int)grabRect.getWidth(), (int)grabRect.getHeight());
+
+                hole.setWidth(Math.abs((e.getX() - hole.getX())));
+                hole.setHeight(Math.abs((e.getY() - hole.getY())));
+            }
+
+            else if(lineType == "Move"){                //move grab to released mouse position
+
+                gc.fillRect(hole.getX(), hole.getY(), hole.getWidth(), hole.getHeight());
+                gc.strokeRect(hole.getX(), hole.getY(), hole.getWidth(), hole.getHeight());
+                gc.drawImage(moveImage, e.getX(), e.getY());
+
+            }
+            else if (lineType == "Rectangle") {         //draw rectangle
+
+                rect.setWidth(Math.abs((e.getX() - rect.getX())));
+                rect.setHeight(Math.abs((e.getY() - rect.getY())));
+                //rect.setX((rect.getX() > e.getX()) ? e.getX(): rect.getX());
+                if(rect.getX() > e.getX()) {
+                    rect.setX(e.getX());
+                }
+                //rect.setY((rect.getY() > e.getY()) ? e.getY(): rect.getY());
+                if(rect.getY() > e.getY()) {
+                    rect.setY(e.getY());
+                }
+                gc.fillRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+                gc.strokeRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+            }
+            if (lineType == "Square") {             //set width of square and height equal and draw
+                rect.setWidth(Math.abs((e.getX() - rect.getX())));
+                rect.setHeight(rect.getWidth());
+                gc.fillRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+                gc.strokeRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
+            }
+            else if (lineType == "Circle") {            //draw circle
+                circ.setRadius((Math.abs(e.getX() - circ.getCenterX()) + Math.abs(e.getY() - circ.getCenterY())) / 2);
+                if(circ.getCenterX() > e.getX()) {
+                    circ.setCenterX(e.getX());
+                }
+                if(circ.getCenterY() > e.getY()) {
+                    circ.setCenterY(e.getY());
+                }
+                gc.fillOval(circ.getCenterX(), circ.getCenterY(), circ.getRadius(), circ.getRadius());
+                gc.strokeOval(circ.getCenterX(), circ.getCenterY(), circ.getRadius(), circ.getRadius());
+
+            }
+            else if (lineType == "Ellipse") {           //draw ellipse
+                elip.setRadiusX(Math.abs(e.getX() - elip.getCenterX()) + Math.abs(e.getY() - elip.getCenterY()));
+                elip.setRadiusY(elip.getRadiusX() / 2);
+
+                gc.fillOval(elip.getCenterX(), elip.getCenterY(), elip.getRadiusX(), elip.getRadiusY());
+                gc.strokeOval(elip.getCenterX(), elip.getCenterY(), elip.getRadiusX(), elip.getRadiusY());
+
+            }
+            else if (lineType == "Free Hand") {         //freehand drawing
+
+                gc.lineTo(e.getX(), e.getY());
+                gc.stroke();
+                gc.closePath();
+                gc.beginPath();
+            }
+            else if (lineType == "Straight Line") {     //set end position of straight line
+                gc.lineTo(e.getX(), e.getY());
+                gc.stroke();
+                gc.closePath();
+            }
+            myHBox.setChanges(true);                    //changes are made
+            primaryStage.setTitle("Matt's Paint *not saved");
+
+        });
 
         final double SCALE_DELTA = 1.1;
 
-        zoomPane.getChildren().add(canvas);
-        zoomPane.setOnScroll(new EventHandler<ScrollEvent>() {
+        zoomPane.setOnScroll(new EventHandler<ScrollEvent>() {      //zoom in or out on scroll
             @Override
             public void handle(ScrollEvent event) {
                 event.consume();
@@ -150,140 +433,7 @@ public class Main extends Application {
             }
         });
 
-        Scene scene = new Scene(sp, realWidth + 120, realHeight + 150);
-        primaryStage.setScene(scene);
-        primaryStage.show();
-
-        canvas.addEventHandler(MouseEvent.MOUSE_DRAGGED,
-                new EventHandler<MouseEvent>() {
-                    @Override
-                    public void handle(MouseEvent event) {
-
-                        if (lineType == "Free Hand") {
-
-                            gc.lineTo(event.getX(), event.getY());
-                            gc.stroke();
-                            gc.closePath();
-                            gc.beginPath();
-                            gc.moveTo(event.getX(), event.getY());
-
-                        }
-                        changes = true;
-                        primaryStage.setTitle("File Chooser Sample *not saved");
-
-                    }
-                });
-
-        canvas.setOnMouseReleased(e-> {
-
-            if(lineType == "Rectangle") {
-                rect.setWidth(Math.abs((e.getX() - rect.getX())));
-                rect.setHeight(Math.abs((e.getY() - rect.getY())));
-                gc.fillRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
-                gc.strokeRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
-            }
-            if(lineType == "Square") {
-                rect.setWidth(Math.abs((e.getX() - rect.getX())));
-                rect.setHeight(rect.getWidth());
-                gc.fillRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
-                gc.strokeRect(rect.getX(), rect.getY(), rect.getWidth(), rect.getHeight());
-            }
-            else if(lineType == "Circle"){
-                circ.setRadius((Math.abs(e.getX() - circ.getCenterX()) + Math.abs(e.getY() - circ.getCenterY())) / 2);
-                gc.fillOval(circ.getCenterX(), circ.getCenterY(), circ.getRadius(), circ.getRadius());
-                gc.strokeOval(circ.getCenterX(), circ.getCenterY(), circ.getRadius(), circ.getRadius());
-
-            }
-            else if(lineType == "Ellipse"){
-                elip.setRadiusX(Math.abs(e.getX() - elip.getCenterX()) + Math.abs(e.getY() - elip.getCenterY()));
-                elip.setRadiusY(elip.getRadiusX()/2);
-
-                gc.fillOval(elip.getCenterX(), elip.getCenterY(), elip.getRadiusX(), elip.getRadiusY());
-                gc.strokeOval(elip.getCenterX(), elip.getCenterY(), elip.getRadiusX(), elip.getRadiusY());
-
-            }
-            else if (lineType == "Free Hand") {
-
-                gc.lineTo(e.getX(), e.getY());
-                gc.stroke();
-                gc.closePath();
-                gc.beginPath();
-            }
-            else if (lineType == "Straight Line") {
-                gc.lineTo(e.getX(), e.getY());
-                gc.stroke();
-                gc.closePath();
-
-            }
-
-            changes = true;
-            primaryStage.setTitle("File Chooser Sample *not saved");
-
-        });
-
-        canvas.setOnMousePressed(e->{
-            WritableImage writableImage = new WritableImage((int) sizeOfCanvas, (int) sizeOfCanvas);
-            canvas.snapshot(null, writableImage);
-            saveToFile(writableImage, 1);
-
-            gc.setStroke(colorPicker.getValue());
-            gc.setFill(colorPicker2.getValue());
-
-            if(lineType == "Color Dropper"){
-                WritableImage image = new WritableImage((int) realWidth, (int) realHeight);
-                canvas.snapshot(null, image);
-                PixelReader r = image.getPixelReader();
-                Color color = r.getColor((int) e.getX(), (int) e.getY());
-                colorPicker.setValue(color);
-
-            }
-            if(lineType == "Rectangle") {
-                rect.setX(e.getX());
-                rect.setY(e.getY());
-            }
-
-            else if(lineType == "Square") {
-                rect.setX(e.getX());
-                rect.setY(e.getY());
-            }
-
-            else if(lineType == "Circle"){
-                circ.setCenterX(e.getX());
-                circ.setCenterY(e.getY());
-            }
-
-            else if(lineType == "Ellipse"){
-                elip.setCenterX(e.getX());
-                elip.setCenterY(e.getY());
-            }
-
-            else if (lineType == "Straight Line") {
-                gc.stroke();
-                //graphicsContext.closePath();
-                gc.beginPath();
-                gc.moveTo(e.getX(), e.getY());
-
-            }
-
-        });
-
-        lineSizeBox.setEditable(true);
-        lineSizeBox.valueProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue ov, String t, String t1) {
-                gc.setLineWidth(Double.parseDouble(t1));
-            }
-        });
-
-        lineTypeBox.setEditable(true);
-        lineTypeBox.valueProperty().addListener(new ChangeListener<String>() {
-            @Override
-            public void changed(ObservableValue ov, String t, String t1) {
-                lineType = t1;
-            }
-        });
-
-        scene.addEventFilter(KeyEvent.KEY_PRESSED, new EventHandler<KeyEvent>() {
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, new EventHandler<KeyEvent>() {       //key pressed combinations for save and open
             final KeyCombination keyComb = new KeyCodeCombination(KeyCode.S, KeyCombination.CONTROL_DOWN);
             final KeyCombination keyComb2 = new KeyCodeCombination(KeyCode.O, KeyCombination.CONTROL_DOWN);
             final KeyCombination keyComb3 = new KeyCodeCombination(KeyCode.Z, KeyCombination.CONTROL_DOWN);
@@ -291,162 +441,53 @@ public class Main extends Application {
 
             public void handle(KeyEvent ke) {
                 if (keyComb.match(ke)) {
-                    saveCheck();
-                    if (changes == false) {
-                        primaryStage.setTitle("File Chooser Sample");
+                    myHBox.saveCheck(secondaryStage,0,null);
+                    if (myHBox.getChanges()) {
+                        primaryStage.setTitle("Matt's Paint");
                     }
                     ke.consume(); // <-- stops passing the event to next node
                 }
                 if (keyComb2.match(ke)) {
-                    open();
+                    myHBox.open(secondaryStage);
                     ke.consume(); // <-- stops passing the event to next node
                 }
-                if (keyComb3.match(ke)) {
-                    zoomIn();
-                    ke.consume(); // <-- stops passing the event to next node
-                }
-            }
-
-        });
-
-        btnUndo.setOnAction(i -> {
-            undo();
-        });
-
-        colorPicker.setOnAction(new EventHandler() {
-            public void handle(Event t) {
-                gc.setStroke(colorPicker.getValue());
-                gc.closePath();
-                gc.beginPath();
-            }
-        });
-
-
-        btnProp.setOnAction(new EventHandler<ActionEvent>() {
-
-            public void handle(ActionEvent t) {
-
-                try {
-                    Properties(secondaryStage);
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
-
-        btnNew.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                try {
-                    start(primaryStage);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                saveCheck();
-
-            }
-        });
-
-        btnClose.setOnAction(i -> {
-            System.exit(0);
-        });
-
-        btnOpen.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                open();
-            }
-        });
-
-        btnOpen2.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                Image selectedImage = null;
-                try {
-                    selectedImage = new Image(new FileInputStream("C:\\users\\matth\\pictures\\paintpic.jpg"));
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                }
-
-                realWidth = selectedImage.getWidth();
-                realHeight = selectedImage.getHeight();
-                if (realWidth > 1500) {
-                    realWidth = realWidth / 5;
-                    realHeight = realHeight / 5;
-
-                }
-
-                primaryStage.setWidth(realWidth);
-                primaryStage.setHeight(realHeight + 150);
-                canvas.setWidth(realWidth);
-                canvas.setHeight(realHeight);
-                sp2.setPrefWidth(realWidth);
-                gc.drawImage(selectedImage, 0, 0, realWidth, realHeight);
-
-                changes = true;
-                primaryStage.setTitle("File Chooser Sample *not saved");
-
 
             }
 
-        });
-
-        btnSave.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                saveCheck();
-                if (changes == false) {
-                    primaryStage.setTitle("File Chooser Sample");
-                }
-            }
-        });
-
-
-        btnSaveAs.setOnAction(new EventHandler<ActionEvent>() {
-
-            public void handle(ActionEvent t) {
-                FileChooser fileChooser = new FileChooser();
-
-                //Set extension filter
-                FileChooser.ExtensionFilter extFilter = new FileChooser.ExtensionFilter("png files (*.png)", "*.png");
-                FileChooser.ExtensionFilter extFilter2 = new FileChooser.ExtensionFilter("jpg files (*.jpg)", "*.jpg");
-                FileChooser.ExtensionFilter extFilter3 = new FileChooser.ExtensionFilter("GIF files (*.gif)", "*.gif");
-
-                fileChooser.getExtensionFilters().addAll(extFilter, extFilter2, extFilter3);
-
-                //Show save file dialog
-                File file = fileChooser.showSaveDialog(primaryStage);
-
-                if (file != null) {
-                    try {
-                        WritableImage writableImage = new WritableImage((int) sizeOfCanvas, (int) sizeOfCanvas);
-                        canvas.snapshot(null, writableImage);
-                        RenderedImage renderedImage = SwingFXUtils.fromFXImage(writableImage, null);
-                        ImageIO.write(renderedImage, "png", file);
-                    } catch (IOException ex) {
-                        // Logger.getLogger(JavaFX_DrawOnCanvas.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                }
-                changes = false;
-                primaryStage.setTitle("File Chooser Sample");
-
-            }
-        });
-
-        btnResize.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                resize();
-            }
         });
 
     }
-
-    public void Properties(Stage secondaryStage) throws Exception {
-        showProperties();
+    /**
+     * sets lineType called from toolMenu
+     * @param line lineType selection from toolMenu
+     * @return
+     */
+    public static void setLineType(String line) {
+        lineType = line;
     }
 
+    /**
+     * sets width of scrollPane
+     */
+
+    public static void setSPWidth(){ sp2.setPrefWidth(myHBox.getMyWidth()); }
+
+    /**
+     *
+     * @param image image that is being saved
+     * @param i     parameter for location of file save
+     */
     public static void saveToFile(Image image, int i) {
         File outputFile;
         if (i == 1) {
-            outputFile = new File("C:\\users\\matth\\documents\\paintwork.png");
+            outputFile = new File("C:\\users\\matth\\documents\\paintwork1.png");
 
-        } else {
+        }
+        else if (i == 2) {
+            outputFile = new File("C:\\users\\matth\\documents\\paintwork2.png");
+
+        }
+        else {
             outputFile = new File("C:\\users\\matth\\documents\\college\\CS250\\paintwork.png");
 
         }
@@ -458,220 +499,8 @@ public class Main extends Application {
         }
     }
 
+
     public static void main(String[] args) {
-        ImagePage img = new ImagePage();
-        //PaintGui b = new PaintGui();
-        //Multiply m = new Multiply();
         launch(args);
-
     }
-
-    public void showProperties() {
-        secondaryStage.setTitle("Properties");
-
-        Text text = new Text();
-        String info = "" +
-                "27 January 2020\n" +
-                "Pain(t) Submission 1\n" +
-                "Matthew Bickelhaupt \n" +
-                "CS250\n" +
-                "\n" +
-                "The program is compiled of one main function with three pages. \n" +
-                "Opening page, image viewer, and blank paint viewer.\n" +
-                "\n" +
-                "Components Include:\n" +
-                "-Open Image from file\n" +
-                "-Save Image\n" +
-                "-Close program\n" +
-                "-Menu Bar: File, Save, Go back, Properties, Edit\n" +
-                "-Increase and Decrease Image view\n" +
-                "\n" +
-                "https://github.com/mattbickelhaupt/CS250\n";
-
-        text.setText(info);
-
-        Button btnClose = new Button("Close");
-        btnClose.setOnAction(i -> {
-            secondaryStage.close();
-        });
-
-        Canvas canvas = new Canvas();
-        HBox hboxMain = new HBox();
-
-        hboxMain.setPadding(new Insets(15, 12, 15, 12));
-        hboxMain.setSpacing(50);
-        hboxMain.getChildren().addAll(btnClose);
-
-        FlowPane flowPane = new FlowPane();
-        flowPane.getChildren().addAll(text, hboxMain);
-        GraphicsContext graphicsContext = canvas.getGraphicsContext2D();
-        graphicsContext.setFill(Color.BLUEVIOLET);
-        graphicsContext.fillRect(0, 0, 200, 200);
-        Scene scene = new Scene(flowPane, 375, 320);
-
-        secondaryStage.setScene(scene);
-        secondaryStage.show();
-
-    }
-
-    private void saveCheck() {
-        if (changes == true) {
-            Stage saveCheck = new Stage();
-            saveCheck.setTitle("Save Changes?");
-            saveCheck.setWidth(300);
-            myBox saveBox = new myBox();
-            myButton btnYes = new myButton("Save");
-            myButton btnCancel = new myButton("Cancel");
-
-            BorderPane savePane = new BorderPane(saveBox);
-            saveBox.getChildren().addAll(btnYes, btnCancel);
-            btnYes.setOnAction(new EventHandler<ActionEvent>() {
-
-                public void handle(ActionEvent t) {
-
-
-                    WritableImage writableImage = new WritableImage((int) sizeOfCanvas, (int) sizeOfCanvas);
-                    canvas.snapshot(null, writableImage);
-                    saveToFile(writableImage, 0);
-
-                    changes = false;
-
-                    saveCheck.close();
-
-
-                }
-            });
-
-            btnCancel.setOnAction(new EventHandler<ActionEvent>() {
-                public void handle(ActionEvent t) {
-                    saveCheck.close();
-                }
-            });
-            Scene saveScene = new Scene(savePane);
-            saveCheck.setScene(saveScene);
-            saveCheck.show();
-        }
-
-    }
-
-    public void open() {
-
-        saveCheck();
-        Image selectedImage = new Image(fileChooser.showOpenDialog(primaryStage).toURI().toString());
-        realWidth = selectedImage.getWidth();
-        realHeight = selectedImage.getHeight();
-
-        if (realWidth > 1500) {
-            realWidth = realWidth / 5;
-            realHeight = realHeight / 5;
-
-        }
-
-        primaryStage.setWidth(realWidth);
-        primaryStage.setHeight(realHeight + 150);
-        canvas.setWidth(realWidth);
-        canvas.setHeight(realHeight);
-        sp2.setPrefWidth(realWidth);
-        gc.drawImage(selectedImage, 0, 0, realWidth, realHeight);
-
-        changes = true;
-        primaryStage.setTitle("File Chooser Sample *not saved");
-
-    }
-
-    public void undo() {
-
-        Image selectedImage = null;
-        try {
-            selectedImage = new Image(new FileInputStream("C:\\users\\matth\\documents\\paintwork.png"));
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-
-        realWidth = selectedImage.getWidth();
-        realHeight = selectedImage.getHeight();
-        if (realWidth > 1500) {
-            realWidth = realWidth / 5;
-            realHeight = realHeight / 5;
-
-        }
-
-        primaryStage.setWidth(realWidth + 50);
-        primaryStage.setHeight(realHeight + 150);
-        canvas.setWidth(realWidth);
-        canvas.setHeight(realHeight);
-        sp2.setPrefWidth(realWidth);
-        gc.drawImage(selectedImage, 0, 0, realWidth, realHeight);
-
-    }
-
-    public void resize() {
-        Stage resizeStage = new Stage();
-        resizeStage.setTitle("Resize Canvas");
-        BorderPane resizePane = new BorderPane();
-        Scene resizeScene = new Scene(resizePane);
-        TextField widthInput = new TextField();
-        TextField heightInput = new TextField();
-        Label widthText = new Label("New Width:   ");
-        Label heightText = new Label("New Height:  ");
-        HBox widthFields = new HBox();
-        HBox heightFields = new HBox();
-        HBox buttons = new HBox();
-        buttons.setSpacing(20);
-        myButton btnApply = new myButton("Apply");
-        myButton btnCancel = new myButton("Cancel");
-        buttons.getChildren().addAll(btnApply, btnCancel);
-        widthFields.getChildren().addAll(widthText, widthInput, buttons);
-        heightFields.getChildren().addAll(heightText, heightInput);
-        VBox resizeBox = new VBox();
-        resizeBox.setSpacing(10);
-        resizeBox.setPadding(new Insets(10, 10, 10, 10));
-        resizeBox.getChildren().addAll(widthFields, heightFields, buttons);
-        resizePane.setCenter(resizeBox);
-        resizeStage.setScene(resizeScene);
-        resizeStage.show();
-
-        btnApply.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                realWidth = Double.parseDouble(widthInput.getText());
-                realHeight = Double.parseDouble(heightInput.getText());
-                canvas.setWidth(realWidth);
-                canvas.setHeight(realHeight);
-                gc.drawImage(selectedImage, 0, 0, realWidth, realHeight);
-                gc.setFill(Color.WHITE);
-                gc.fillRect(0, 0, realWidth + 50, realHeight);
-                sp2.setPrefWidth(realWidth);
-
-                resizeStage.close();
-
-
-            }
-        });
-        btnCancel.setOnAction(new EventHandler<ActionEvent>() {
-            public void handle(ActionEvent t) {
-                resizeStage.close();
-            }
-        });
-    }
-
-    public void zoomIn() {
-
-        canvas.setScaleX(12);
-        canvas.setScaleY(12);
-
-        changes = true;
-        primaryStage.setTitle("File Chooser Sample *not saved");
-
-        canvas.addEventHandler(MouseEvent.MOUSE_DRAGGED,
-                new EventHandler<MouseEvent>() {
-                    @Override
-                    public void handle(MouseEvent event) {
-
-
-                    }
-                });
-
-
-    }
-
 }
